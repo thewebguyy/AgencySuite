@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
-export default async function ClientDetailPage({ params }: { params: { id: string } }) {
+export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
