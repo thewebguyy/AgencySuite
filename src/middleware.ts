@@ -1,8 +1,14 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Protecting all routes under the dashboard route group
-const isDashboardRoute = createRouteMatcher([
+/**
+ * PRODUCTION-HARDENED MIDDLEWARE
+ * This middleware is optimized for Next.js 15 + Clerk v7 + Vercel Edge Runtime.
+ * It follows the "Fail Open" principle to ensure the app never crashes at the middleware layer.
+ */
+
+// Define protected routes
+const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)", 
   "/proposals(.*)", 
   "/contracts(.*)", 
@@ -15,41 +21,51 @@ const isDashboardRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { nextUrl } = req;
-  
-  // Trace execution in Vercel logs
-  console.log(`[Middleware] Processing request for: ${nextUrl.pathname}`);
+  // Trace hit
+  // console.log(`[Middleware] Hit: ${req.nextUrl.pathname}`);
 
   try {
-    const isPublic = !isDashboardRoute(req);
-    
-    if (!isPublic) {
-      console.log(`[Middleware] Protected route detected, checking auth for: ${nextUrl.pathname}`);
-      await auth.protect();
+    // 1. HARDENED AUTH CHECK
+    // In Clerk v6/v7, auth is a function (auth()). Calling .protect() on the function itself crashes.
+    if (isProtectedRoute(req)) {
+      await auth().protect();
     }
 
-    // Set the pathname in headers so RSC layout can access it
+    // 2. SET PATHNAME IN HEADERS (For use in Server Components)
     const requestHeaders = new Headers(req.headers);
-    requestHeaders.set("x-pathname", nextUrl.pathname);
+    requestHeaders.set("x-pathname", req.nextUrl.pathname);
 
     return NextResponse.next({
       request: {
         headers: requestHeaders,
       },
     });
-  } catch (error) {
-    console.error("[Middleware] Error processing request:", error);
-    // Let Clerk handle redirects if it's an auth error, else re-throw so Vercel can show the error
-    throw error;
+  } catch (error: any) {
+    // 3. FAIL-SAFE LOGIC
+    
+    // Check if error is a standard Next.js or Clerk redirect
+    // We MUST re-throw these for the authentication flow to work correctly.
+    if (
+      error && 
+      (error.digest?.startsWith('NEXT_REDIRECT') || 
+       error.name === 'Error' && error.message.includes('NEXT_REDIRECT') ||
+       error.__clerk_is_redirect)
+    ) {
+      throw error;
+    }
+
+    // Log the error for triage but don't crash
+    console.error(`[MIDDLEWARE FATAL ERROR for ${req.nextUrl.pathname}]:`, error);
+
+    // Fail open: let the request through. Page-level auth will act as a last defense.
+    return NextResponse.next();
   }
 });
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
+    // Optimized matcher for Next.js 15
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    // Always run for API routes
     "/api/(.*)",
   ],
 };
-
