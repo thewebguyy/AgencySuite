@@ -1,0 +1,2 @@
+echo "🚀 Running all guard checks and build before pushing..."
+npm run guard:all && npm run build

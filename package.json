@@ -9,7 +9,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "vitest"
+    "test": "vitest",
+    "prepare": "husky",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "guard:edge": "node scripts/edge-runtime-check.js",
+    "guard:env": "node scripts/env-check.js",
+    "guard:src": "node scripts/clean-src-check.js",
+    "guard:all": "npm run guard:edge && npm run guard:env && npm run guard:src && npm run lint && npm run typecheck",
+    "triage": "node scripts/triage-engine.js"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,js,jsx}": [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run guard:edge",
+      "npm run guard:src"
+    ],
+    "*": [
+      "npm run guard:all"
+    ]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
@@ -49,8 +68,14 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/parser": "^8.58.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.2",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.0",
+    "lint-staged": "^16.4.0",
     "vitest": "^4.1.0"
   }
 }

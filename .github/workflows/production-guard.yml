@@ -1,0 +1,49 @@
+name: Production Guard CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run Guard Checks
+      run: |
+        npm run guard:edge
+        npm run guard:src
+        # Skip guard:env in CI as .env.local is usually ignored.
+        # We can simulate this if needed by creating a dummy one.
+        cp .env.example .env.local
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Type Check
+      run: npm run typecheck
+
+    - name: Build
+      run: npm run build
+      env:
+        # Mock environment variables for build if necessary
+        CLERK_SECRET_KEY: skip
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: skip
+        DATABASE_URL: skip
+        RESEND_API_KEY: skip
+        STRIPE_SECRET_KEY: skip
+        SUPABASE_URL: skip
+        SUPABASE_SERVICE_ROLE_KEY: skip
