@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/billing/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 import { logError, logInfo } from "@/lib/logger";
 import type Stripe from "stripe";
 
@@ -13,6 +13,7 @@ export async function POST(req: Request) {
   const context = { route: "/api/billing/webhook", method: "POST" };
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
+  const env = getEnv();
 
   if (!sig) {
     logError("Missing stripe-signature header", new Error("No signature"), context);
@@ -142,4 +143,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ received: true });
 }
-

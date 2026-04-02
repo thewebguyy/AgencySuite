@@ -1,11 +1,12 @@
 import Stripe from "stripe";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 let stripeInstance: Stripe | null = null;
 
 export function getStripe() {
   if (stripeInstance) return stripeInstance;
 
+  const env = getEnv();
   stripeInstance = new Stripe(env.STRIPE_SECRET_KEY, {
     apiVersion: "2024-12-18.acacia" as any,
   });
@@ -17,30 +18,42 @@ export function getStripe() {
 // Plan Configuration
 // ---------------------------------------------------------------------------
 
+// Using getters to ensure lazy evaluation of environment variables
 export const PLANS = {
-  trial: {
-    name: "Free Trial",
-    priceId: null,
-    price: 0,
-    limits: { reports: 5, proposals: 3, clients: 5 },
+  get trial() {
+    return {
+      name: "Free Trial",
+      priceId: null,
+      price: 0,
+      limits: { reports: 5, proposals: 3, clients: 5 },
+    };
   },
-  starter: {
-    name: "Starter",
-    priceId: env.STRIPE_STARTER_PRICE_ID,
-    price: 29,
-    limits: { reports: 15, proposals: 10, clients: 15 },
+  get starter() {
+    const env = getEnv();
+    return {
+      name: "Starter",
+      priceId: env.STRIPE_STARTER_PRICE_ID,
+      price: 29,
+      limits: { reports: 15, proposals: 10, clients: 15 },
+    };
   },
-  agency_suite: {
-    name: "Agency Suite",
-    priceId: env.STRIPE_AGENCY_SUITE_PRICE_ID,
-    price: 79,
-    limits: { reports: -1, proposals: -1, clients: -1 }, // -1 = unlimited
+  get agency_suite() {
+    const env = getEnv();
+    return {
+      name: "Agency Suite",
+      priceId: env.STRIPE_AGENCY_SUITE_PRICE_ID,
+      price: 79,
+      limits: { reports: -1, proposals: -1, clients: -1 }, // -1 = unlimited
+    };
   },
-  scale: {
-    name: "Scale",
-    priceId: env.STRIPE_SCALE_PRICE_ID,
-    price: 199,
-    limits: { reports: -1, proposals: -1, clients: -1 },
+  get scale() {
+    const env = getEnv();
+    return {
+      name: "Scale",
+      priceId: env.STRIPE_SCALE_PRICE_ID,
+      price: 199,
+      limits: { reports: -1, proposals: -1, clients: -1 },
+    };
   },
 } as const;
 
@@ -71,6 +84,7 @@ export async function createCheckoutSession(
   agencyId: string
 ): Promise<Stripe.Checkout.Session> {
   const stripe = getStripe();
+  const env = getEnv();
   return stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
@@ -92,9 +106,9 @@ export async function createPortalSession(
   customerId: string
 ): Promise<Stripe.BillingPortal.Session> {
   const stripe = getStripe();
+  const env = getEnv();
   return stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url: `${env.NEXT_PUBLIC_APP_URL}/billing`,
   });
 }
-

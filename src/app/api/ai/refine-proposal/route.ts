@@ -1,18 +1,15 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getAnthropic } from "@/lib/ai/shared";
 
 export const runtime = "edge";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
 
 export async function POST(req: Request) {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) return new NextResponse("Unauthorized", { status: 401 });
 
   const { action, currentData } = await req.json();
+  const anthropic = getAnthropic();
 
   let systemPrompt = "";
   let userPrompt = "";

@@ -40,34 +40,58 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
-// For Next.js client-side safety, we only expose NEXT_PUBLIC vars in a separate schema if needed,
-// but for the server-side, we want everything.
+type Env = z.infer<typeof envSchema>;
 
-let env: z.infer<typeof envSchema>;
+let _env: Env | undefined;
 
-try {
-  env = envSchema.parse(process.env);
-} catch (error) {
-  if (error instanceof z.ZodError) {
-    const missingVars = error.issues.map((issue) => issue.path.join(".")).join(", ");
-    const errorMessage = `❌ Invalid environment variables: ${missingVars}`;
-    
-    if (process.env.NODE_ENV === "production") {
+export function getEnv(): Env {
+  // Return cached env if already validated
+  if (_env) return _env;
+
+  // During build phase or on the client, we might not have all env vars.
+  // We want to avoid crashing the build.
+  const isBuild = process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV && !process.env.VERCEL;
+  const isClient = typeof window !== "undefined";
+  
+  try {
+    _env = envSchema.parse(process.env);
+    return _env;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const missingVars = error.issues.map((issue) => issue.path.join(".")).join(", ");
+      const errorMessage = `❌ Invalid environment variables: ${missingVars}`;
+      
+      // If we are in the build phase or on the client, don't throw, just warn
+      if (isBuild || isClient) {
+        if (!isClient) {
+          console.warn("\x1b[33m%s\x1b[0m", "⚠️  WARNING: Environment validation failed during build phase.");
+          console.warn(`Missing: ${missingVars}`);
+        }
+        // Return a partial object or cast process.env to Env to allow execution to continue
+        return process.env as unknown as Env;
+      }
+
       console.error(JSON.stringify({
         level: "error",
         message: "ENVIRONMENT_VALIDATION_FAILED",
         missing: missingVars,
       }));
-      // In production, we might want to continue if some are optional, 
-      // but essential ones should probably still fail if the app can't function.
-      // For now, let's keep it strict.
       throw new Error(errorMessage);
     } else {
-      throw new Error(errorMessage);
+      throw error;
     }
-  } else {
-    throw error;
   }
 }
 
-export { env };
+// Still export the env object for compatibility, but it will be evaluated lazily if possible
+// or just keep it as a legacy export that calls getEnv().
+// However, since we want to avoid import-time crashes, we should probably 
+// not export 'env' as a constant that calls getEnv() here.
+// But some files might already import { env } from "@/lib/env".
+// Let's use a Proxy for the legacy 'env' export to keep it lazy.
+
+export const env = new Proxy({} as Env, {
+  get(_, prop) {
+    return getEnv()[prop as keyof Env];
+  }
+});

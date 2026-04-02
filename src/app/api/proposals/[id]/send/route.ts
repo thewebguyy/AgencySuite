@@ -2,14 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
-
-const resend = new Resend(process.env.RESEND_API_KEY!);
+import { getEnv } from "@/lib/env";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { orgId } = await auth();
   if (!orgId) return new NextResponse("Unauthorized", { status: 401 });
 
+  const env = getEnv();
+  const resend = new Resend(env.RESEND_API_KEY);
   const supabase = await createClient();
 
   // Load proposal with client info
@@ -24,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // 1. Generate PDF via local Node.js API
-  const pdfUrlResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/proposals/${id}/pdf`, {
+  const pdfUrlResponse = await fetch(`${env.NEXT_PUBLIC_APP_URL}/api/proposals/${id}/pdf`, {
     headers: {
       "Cookie": req.headers.get("Cookie") || "" // Forward auth cookie
     }
@@ -48,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         <p>${proposal.agency.name} has sent you a new project proposal for <strong>${proposal.title}</strong>.</p>
         <p style="font-size: 18px;">Total Investment: <strong>${proposal.currency} ${proposal.total_price.toLocaleString()}</strong></p>
         <div style="margin: 32px 0;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL}/proposals/view/${proposal.share_token}" 
+          <a href="${env.NEXT_PUBLIC_APP_URL}/proposals/view/${proposal.share_token}" 
              style="background-color: ${proposal.agency.brand_color || '#5B5BD6'}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
             View Detailed Proposal
           </a>

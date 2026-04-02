@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 export function createAdminClient() {
+  const env = getEnv();
   return createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
@@ -13,4 +14,3 @@ export function createAdminClient() {
     }
   );
 }
-

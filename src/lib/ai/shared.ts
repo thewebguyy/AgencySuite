@@ -1,9 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getEnv } from "@/lib/env";
 
-// Singleton client — reused across all AI features
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+// Lazy client — initialized only when needed
+let _anthropic: Anthropic | undefined;
+
+export function getAnthropic() {
+  if (_anthropic) return _anthropic;
+  
+  const env = getEnv();
+  _anthropic = new Anthropic({
+    apiKey: env.ANTHROPIC_API_KEY,
+  });
+  return _anthropic;
+}
 
 // ---------------------------------------------------------------------------
 // Rate Limiter (in-memory, per-instance — use Upstash Redis in production)
@@ -46,6 +55,7 @@ export async function callClaude(
 ) {
   const { stream = true, maxTokens = 4096, retries = 3 } = options;
   let delay = 2000;
+  const anthropic = getAnthropic();
 
   for (let i = 0; i < retries; i++) {
     try {
