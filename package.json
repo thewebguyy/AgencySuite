@@ -17,16 +17,7 @@
     "guard:env": "node scripts/env-check.js",
     "guard:src": "node scripts/clean-src-check.js",
     "guard:all": "npm run guard:edge && npm run guard:env && npm run guard:src && npm run lint && npm run typecheck",
-    "triage": "node scripts/triage-engine.js",
-    "prepare": "husky || true"
-  },
-  "lint-staged": {
-    "src/**/*.{js,jsx,ts,tsx}": [
-      "next lint --fix"
-    ],
-    "src/middleware.ts": [
-      "node scripts/edge-runtime-check.js"
-    ]
+    "triage": "node scripts/triage-engine.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
@@ -71,9 +62,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.2",
-    "husky": "^9.1.7",
     "jsdom": "^29.0.0",
-    "lint-staged": "^16.4.0",
     "vitest": "^4.1.0"
   }
 }

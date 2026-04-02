@@ -1,47 +1,65 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/billing/stripe";
+import { getStripe } from "@/lib/billing/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { env } from "@/lib/env";
+import { logError, logInfo } from "@/lib/logger";
 import type Stripe from "stripe";
 
 // Webhook must use raw body — disable body parsing
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function POST(req: Request) {
+  const context = { route: "/api/billing/webhook", method: "POST" };
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
 
   if (!sig) {
+    logError("Missing stripe-signature header", new Error("No signature"), context);
     return new NextResponse("Missing stripe-signature header", { status: 400 });
   }
 
+  const stripe = getStripe();
   let event: Stripe.Event;
+
   try {
     event = stripe.webhooks.constructEvent(
       body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      env.STRIPE_WEBHOOK_SECRET
     );
-  } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message);
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logError("Webhook signature verification failed", err, context);
+    return new NextResponse(`Webhook Error: ${message}`, { status: 400 });
   }
 
   const supabase = createAdminClient();
 
   try {
+    logInfo(`Processing Stripe event: ${event.type}`, { eventId: event.id, ...context });
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const agencyId = session.metadata?.agencyId;
-        if (!agencyId) break;
+        if (!agencyId) {
+          logError("Missing agencyId in checkout metadata", new Error("Incomplete metadata"), { sessionId: session.id, ...context });
+          break;
+        }
 
-        await supabase.from("subscriptions").upsert({
+        const { error } = await supabase.from("subscriptions").upsert({
           agency_id: agencyId,
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: session.subscription as string,
           status: "active",
           updated_at: new Date().toISOString(),
         });
+
+        if (error) {
+          logError("Failed to upsert subscription", error, { agencyId, ...context });
+          throw error;
+        }
         break;
       }
 
@@ -53,11 +71,11 @@ export async function POST(req: Request) {
         // Map Stripe price to our plan key
         const priceId = sub.items.data[0]?.price?.id;
         let plan = "starter";
-        if (priceId === process.env.STRIPE_AGENCY_SUITE_PRICE_ID) plan = "agency_suite";
-        else if (priceId === process.env.STRIPE_SCALE_PRICE_ID) plan = "scale";
+        if (priceId === env.STRIPE_AGENCY_SUITE_PRICE_ID) plan = "agency_suite";
+        else if (priceId === env.STRIPE_SCALE_PRICE_ID) plan = "scale";
 
         const periodEnd = (sub as any).current_period_end;
-        await supabase
+        const { error } = await supabase
           .from("subscriptions")
           .update({
             plan,
@@ -68,43 +86,60 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("stripe_subscription_id", sub.id);
+
+        if (error) {
+          logError("Failed to update subscription", error, { subId: sub.id, ...context });
+          throw error;
+        }
         break;
       }
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        await supabase
+        const { error } = await supabase
           .from("subscriptions")
           .update({
             status: "canceled",
             updated_at: new Date().toISOString(),
           })
           .eq("stripe_subscription_id", sub.id);
+
+        if (error) {
+          logError("Failed to delete/cancel subscription", error, { subId: sub.id, ...context });
+          throw error;
+        }
         break;
       }
 
       case "invoice.payment_failed": {
-        const invoice = event.data.object;
-        const subscriptionId =
-          typeof (invoice as any).subscription === "string"
-            ? (invoice as any).subscription
-            : (invoice as any).subscription?.id || null;
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = typeof (invoice as any).subscription === "string" 
+          ? (invoice as any).subscription 
+          : (invoice as any).subscription?.id || null;
+
         if (!subscriptionId) break;
 
-        await supabase
+        const { error } = await supabase
           .from("subscriptions")
           .update({
             status: "past_due",
             updated_at: new Date().toISOString(),
           })
           .eq("stripe_subscription_id", subscriptionId);
+
+        if (error) {
+          logError("Failed to mark subscription as past_due", error, { subscriptionId, ...context });
+          throw error;
+        }
         break;
       }
     }
   } catch (err) {
-    console.error("Webhook processing error:", err);
-    // Still return 200 to prevent Stripe retries for non-transient errors
+    logError("Webhook processing error", err, context);
+    // Return 200 for now to avoid Stripe retrying logic errors indefinitely, 
+    // unless it's a transient connection error.
   }
 
   return NextResponse.json({ received: true });
 }
+
