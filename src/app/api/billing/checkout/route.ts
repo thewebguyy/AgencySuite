@@ -1,5 +1,9 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 import { getCurrentAgency } from "@/lib/auth/agency";
 import {
   getOrCreateCustomer,

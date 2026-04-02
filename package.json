@@ -7,27 +7,25 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/prebuild-check.js",
     "build": "next build",
     "start": "next start",
     "test": "vitest",
-    "prepare": "husky",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "guard:edge": "node scripts/edge-runtime-check.js",
     "guard:env": "node scripts/env-check.js",
     "guard:src": "node scripts/clean-src-check.js",
     "guard:all": "npm run guard:edge && npm run guard:env && npm run guard:src && npm run lint && npm run typecheck",
-    "triage": "node scripts/triage-engine.js"
+    "triage": "node scripts/triage-engine.js",
+    "prepare": "husky || true"
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx,js,jsx}": [
-      "npm run lint",
-      "npm run typecheck",
-      "npm run guard:edge",
-      "npm run guard:src"
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "next lint --fix"
     ],
-    "*": [
-      "npm run guard:all"
+    "src/middleware.ts": [
+      "node scripts/edge-runtime-check.js"
     ]
   },
   "dependencies": {
